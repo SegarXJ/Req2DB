@@ -83,7 +83,7 @@ public class ReqLogger implements ExtensionUnloadingHandler {
             stmt.setString(7, (reqInfo.response() != null) ? String.valueOf(reqInfo.response().statusCode()) : "");
             //RESPONSE_RAW 响应包
             stmt.setString(8, (reqInfo.response()!= null) ? reqInfo.response().toString() : "");
-            Api.logging().logToOutput("INSERT SUCCESS");
+//            Api.logging().logToOutput("INSERT SUCCESS");
 
             int count = stmt.executeUpdate();
             if (count != 1) {
@@ -99,9 +99,6 @@ public class ReqLogger implements ExtensionUnloadingHandler {
             Api.logging().logToOutput("Open new connection to the storage.");
             this.storageConnection = DriverManager.getConnection(url);
             this.storageConnection.setAutoCommit(true);
-        }else {
-            Api.logging().logToOutput("already had connection to the storage.");
-
         }
 
     }

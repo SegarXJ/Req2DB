@@ -3,10 +3,15 @@ package extension;
 import burp.api.montoya.BurpExtension;
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.http.message.HttpRequestResponse;
+import burp.api.montoya.sitemap.SiteMapFilter;
+import burp.api.montoya.sitemap.SiteMapNode;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.Arrays;
 import java.util.List;
 
 public class MyExtension implements BurpExtension {
@@ -18,7 +23,7 @@ public class MyExtension implements BurpExtension {
     @Override
     public void initialize(MontoyaApi montoyaApi) {
         Api = montoyaApi;
-        String storeFileName = "D://" + extensionName + ".db";
+        String storeFileName = "E://" + extensionName + ".db";
         try {
             Api.extension().setName(extensionName);
 
@@ -46,7 +51,7 @@ public class MyExtension implements BurpExtension {
 
             setLayout(new BoxLayout(this, BoxLayout.PAGE_AXIS));
 
-            //定义面板
+            //定义初始面板
             JPanel myPanel = new JPanel();
 
             //数据库文件名
@@ -86,20 +91,7 @@ public class MyExtension implements BurpExtension {
             //输出sitemap请求到数据库
             JButton toDBButton = new JButton();
             toDBButton.setText("Save to DB:");
-            toDBButton.addActionListener(e -> {
-                List<HttpRequestResponse> httpRequestResponses = Api.siteMap().requestResponses();
-                for (int i = 0; i < httpRequestResponses.size(); i++) {
-
-                    Api.logging().logToOutput(i + "/" + httpRequestResponses.size());
-
-                    HttpRequestResponse httpRequestResponse = httpRequestResponses.get(i);
-                    try {
-                        reqLogger.siteMaplogEvent(httpRequestResponse);
-                    } catch (Exception ex) {
-                        throw new RuntimeException(ex);
-                    }
-                }
-            });
+            toDBButton.addActionListener(this::saveToDB);
 
             //按钮的样式
             myPanel.add(toDBButton, new GridBagConstraints(2, 1, 1, 1, 0.0, 0.0,
@@ -108,8 +100,60 @@ public class MyExtension implements BurpExtension {
             add(myPanel);
 
 
+            //TODO 进度输出到界面
+
+
+            //TODO 从DB回读请求,进行越权测试
+            //TODO: 测试越权插件 二开/自研 不同端口代理区分权限角色
+
+
         }
 
+        private void saveToDB(ActionEvent e) {
+            List<HttpRequestResponse> httpRequestResponses = Api.siteMap().requestResponses(node -> {
+                // 常见前端静态文件后缀集合
+                final List<String> STATIC_FILE_EXTENSIONS = Arrays.asList(
+                        ".js",
+                        ".css",
+                        ".jpg",
+                        ".jpeg",
+                        ".png",
+                        ".gif",
+                        ".svg",
+                        ".woff",
+                        ".woff2",
+                        ".ttf",
+                        ".eot",
+                        ".html",
+                        ".ico"
+                );
+                URL url;
+                try {
+                    url = new URL(node.url());
+                } catch (MalformedURLException ex) {
+                    throw new RuntimeException(ex);
+                }
+                String path = url.getPath();
+
+                // 将路径转换为小写并检查是否包含任何静态文件后缀
+                return STATIC_FILE_EXTENSIONS.stream()
+                        .noneMatch(path.toLowerCase()::endsWith);
+
+            });
+
+
+            for (int i = 0; i < httpRequestResponses.size(); i++) {
+
+                Api.logging().logToOutput("Saving--------"+i + "/" + httpRequestResponses.size());
+
+                HttpRequestResponse httpRequestResponse = httpRequestResponses.get(i);
+                try {
+                    reqLogger.siteMaplogEvent(httpRequestResponse);
+                } catch (Exception ex) {
+                    throw new RuntimeException(ex);
+                }
+            }
+        }
     }
 
 
