@@ -2,17 +2,23 @@ package extension;
 
 import burp.api.montoya.BurpExtension;
 import burp.api.montoya.MontoyaApi;
+import burp.api.montoya.http.HttpService;
 import burp.api.montoya.http.message.HttpRequestResponse;
-import burp.api.montoya.sitemap.SiteMapFilter;
-import burp.api.montoya.sitemap.SiteMapNode;
+import burp.api.montoya.http.message.requests.HttpRequest;
+import burp.api.montoya.http.message.responses.HttpResponse;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;
+
+import static burp.api.montoya.http.message.requests.HttpRequest.httpRequest;
+import static burp.api.montoya.http.message.responses.HttpResponse.httpResponse;
 
 public class MyExtension implements BurpExtension {
     public static MontoyaApi Api;
@@ -77,10 +83,8 @@ public class MyExtension implements BurpExtension {
 
             //保存按钮,设置数据库文件名的值
             JButton storeFileNameSaveButton = new JButton();
-            storeFileNameSaveButton.setText("Save");
-            storeFileNameSaveButton.addActionListener(e -> {
-                Api.logging().logToOutput(storeFileNameTextField.getText());
-            });
+            storeFileNameSaveButton.setText("Load from DB:");
+            storeFileNameSaveButton.addActionListener(this::loadFromDB);
 
             //保存按钮的样式
             myPanel.add(storeFileNameSaveButton, new GridBagConstraints(2, 1, 1, 1, 0.0, 0.0,
@@ -144,7 +148,7 @@ public class MyExtension implements BurpExtension {
 
             for (int i = 0; i < httpRequestResponses.size(); i++) {
 
-                Api.logging().logToOutput("Saving--------"+i + "/" + httpRequestResponses.size());
+                Api.logging().logToOutput("Saving--------" + i + "/" + httpRequestResponses.size());
 
                 HttpRequestResponse httpRequestResponse = httpRequestResponses.get(i);
                 try {
@@ -153,6 +157,74 @@ public class MyExtension implements BurpExtension {
                     throw new RuntimeException(ex);
                 }
             }
+        }
+
+        private void loadFromDB(ActionEvent e){
+
+            Api.logging().logToOutput("httpRequest.TEST");
+
+            try (ResultSet resultSet = reqLogger.loadDB()) {
+
+                Api.logging().logToOutput("getFetchSize++"+resultSet.getFetchSize());
+
+                while (resultSet.next()) {
+
+
+                    String REQUEST_RAW = resultSet.getString("REQUEST_RAW");
+                    String RESPONSE_RAW = resultSet.getString("RESPONSE_RAW");
+                    String TARGET_URL = resultSet.getString("TARGET_URL");
+                    URL url = new URL(TARGET_URL);
+                    String host = url.getHost();
+
+                    HttpRequest httpRequest = httpRequest(REQUEST_RAW);
+                    HttpResponse httpResponse = httpResponse(RESPONSE_RAW);
+
+
+
+                    HttpRequest httpRequest1 = httpRequest.withService(new HttpService() {
+                        @Override
+                        public String host() {
+                            return host;
+                        }
+
+                        @Override
+                        public int port() {
+                            return 443;
+                        }
+
+                        @Override
+                        public boolean secure() {
+                            return true;
+                        }
+
+                        @Override
+                        public String ipAddress() {
+                            return null;
+                        }
+                    });
+
+                    Api.logging().logToOutput("httpRequest.httpService().host():");
+                    Api.logging().logToOutput(httpRequest1.httpService().host());
+
+                    Api.repeater().sendToRepeater(httpRequest1);
+                    HttpRequestResponse httpRequestResponse = HttpRequestResponse.httpRequestResponse(httpRequest1, httpResponse);
+
+
+                    Api.siteMap().add(httpRequestResponse);
+
+
+                }
+            } catch (Exception ex) {
+                Api.logging().logToOutput(String.valueOf(ex));
+
+
+                throw new RuntimeException(ex);
+
+
+
+            }
+
+
         }
     }
 

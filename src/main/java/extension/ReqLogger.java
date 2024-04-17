@@ -5,6 +5,7 @@ import burp.api.montoya.extension.ExtensionUnloadingHandler;
 import burp.api.montoya.http.message.HttpRequestResponse;
 
 import java.net.InetAddress;
+import java.net.URL;
 import java.sql.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -18,6 +19,7 @@ public class ReqLogger implements ExtensionUnloadingHandler {
      */
     private static final String SQL_TABLE_CREATE = "CREATE TABLE IF NOT EXISTS ACTIVITY (LOCAL_SOURCE_IP TEXT, HTTP_METHOD TEXT,TARGET_URL TEXT,  BURP_TOOL TEXT, REQUEST_RAW TEXT, SEND_DATETIME TEXT, HTTP_STATUS_CODE TEXT, RESPONSE_RAW TEXT)";
     private static final String SQL_TABLE_INSERT = "INSERT INTO ACTIVITY (LOCAL_SOURCE_IP,HTTP_METHOD,TARGET_URL,BURP_TOOL,REQUEST_RAW,SEND_DATETIME,HTTP_STATUS_CODE,RESPONSE_RAW) VALUES(?,?,?,?,?,?,?,?)";
+    private static final String SQL_TABLE_SELECT = "SELECT * FROM ACTIVITY";
     private static final String SQL_COUNT_RECORDS = "SELECT COUNT(HTTP_METHOD) FROM ACTIVITY";
     private static final String SQL_TOTAL_AMOUNT_DATA_SENT = "SELECT TOTAL(LENGTH(REQUEST_RAW)) FROM ACTIVITY";
     private static final String SQL_BIGGEST_REQUEST_AMOUNT_DATA_SENT = "SELECT MAX(LENGTH(REQUEST_RAW)) FROM ACTIVITY";
@@ -54,6 +56,8 @@ public class ReqLogger implements ExtensionUnloadingHandler {
 
     }
 
+    public ReqLogger() {
+    }
 
     void siteMaplogEvent(HttpRequestResponse reqInfo) throws Exception {
         //Verify that the DB connection is still opened
@@ -71,7 +75,13 @@ public class ReqLogger implements ExtensionUnloadingHandler {
 
             //BURP_TOOL 从bp哪个工具来的请求，如proxy、repeater
 
-            stmt.setString(4, "SiteMap");
+//            stmt.setString(4, "SiteMap");
+
+            URL subUrl = new URL(reqInfo.request().url());
+            String subUrlHost = subUrl.getHost();
+            stmt.setString(4, subUrlHost);
+
+
             //请求
             //REQUEST_RAW 请求包
             stmt.setString(5, reqInfo.request().toString());
@@ -82,7 +92,7 @@ public class ReqLogger implements ExtensionUnloadingHandler {
 //            stmt.setString(7, String.valueOf(reqInfo.response().statusCode()));
             stmt.setString(7, (reqInfo.response() != null) ? String.valueOf(reqInfo.response().statusCode()) : "");
             //RESPONSE_RAW 响应包
-            stmt.setString(8, (reqInfo.response()!= null) ? reqInfo.response().toString() : "");
+            stmt.setString(8, (reqInfo.response() != null) ? reqInfo.response().toString() : "");
 //            Api.logging().logToOutput("INSERT SUCCESS");
 
             int count = stmt.executeUpdate();
@@ -91,6 +101,17 @@ public class ReqLogger implements ExtensionUnloadingHandler {
             }
         }
     }
+
+    ResultSet loadDB() throws Exception {
+        //Verify that the DB connection is still opened
+        this.ensureDBState();
+
+        try (PreparedStatement stmt = this.storageConnection.prepareStatement(SQL_TABLE_SELECT)) {
+
+            return stmt.executeQuery();
+        }
+    }
+
 
     private void ensureDBState() throws Exception {
         //Verify that the DB connection is still opened
