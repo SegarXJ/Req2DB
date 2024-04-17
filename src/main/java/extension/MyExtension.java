@@ -13,7 +13,6 @@ import java.awt.event.ActionEvent;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;
 
@@ -137,6 +136,7 @@ public class MyExtension implements BurpExtension {
                 } catch (MalformedURLException ex) {
                     throw new RuntimeException(ex);
                 }
+
                 String path = url.getPath();
 
                 // 将路径转换为小写并检查是否包含任何静态文件后缀

@@ -5,11 +5,9 @@ import burp.api.montoya.extension.ExtensionUnloadingHandler;
 import burp.api.montoya.http.message.HttpRequestResponse;
 
 import java.net.InetAddress;
-import java.net.URL;
 import java.sql.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.List;
 
 public class ReqLogger implements ExtensionUnloadingHandler {
 
@@ -17,13 +15,23 @@ public class ReqLogger implements ExtensionUnloadingHandler {
     /**
      * SQL instructions.
      */
-    private static final String SQL_TABLE_CREATE = "CREATE TABLE IF NOT EXISTS ACTIVITY (LOCAL_SOURCE_IP TEXT, HTTP_METHOD TEXT,TARGET_URL TEXT,  BURP_TOOL TEXT, REQUEST_RAW TEXT, SEND_DATETIME TEXT, HTTP_STATUS_CODE TEXT, RESPONSE_RAW TEXT)";
-    private static final String SQL_TABLE_INSERT = "INSERT INTO ACTIVITY (LOCAL_SOURCE_IP,HTTP_METHOD,TARGET_URL,BURP_TOOL,REQUEST_RAW,SEND_DATETIME,HTTP_STATUS_CODE,RESPONSE_RAW) VALUES(?,?,?,?,?,?,?,?)";
+    private static final String SQL_TABLE_CREATE = "CREATE TABLE IF NOT EXISTS ACTIVITY (LOCAL_SOURCE_IP TEXT, HTTP_METHOD TEXT,TARGET_URL TEXT,  SUB_URL TEXT UNIQUE , REQUEST_RAW TEXT, SEND_DATETIME TEXT, HTTP_STATUS_CODE TEXT, RESPONSE_RAW TEXT)";
+    //    private static final String SQL_TABLE_INSERT = "INSERT INTO ACTIVITY (LOCAL_SOURCE_IP,HTTP_METHOD,TARGET_URL,SUB_URL,REQUEST_RAW,SEND_DATETIME,HTTP_STATUS_CODE,RESPONSE_RAW) VALUES(?,?,?,?,?,?,?,?)";
+    private static final String SQL_TABLE_UPSERT = """
+                INSERT INTO ACTIVITY (LOCAL_SOURCE_IP, HTTP_METHOD, TARGET_URL, SUB_URL, REQUEST_RAW, SEND_DATETIME, HTTP_STATUS_CODE, RESPONSE_RAW)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(SUB_URL) DO UPDATE SET
+                    LOCAL_SOURCE_IP = excluded.LOCAL_SOURCE_IP,
+                    HTTP_METHOD = excluded.HTTP_METHOD,
+                    TARGET_URL = excluded.TARGET_URL,
+                    REQUEST_RAW = excluded.REQUEST_RAW,
+                    SEND_DATETIME = excluded.SEND_DATETIME,
+                    HTTP_STATUS_CODE = excluded.HTTP_STATUS_CODE,
+                    RESPONSE_RAW = excluded.RESPONSE_RAW
+            """;
+
     private static final String SQL_TABLE_SELECT = "SELECT * FROM ACTIVITY";
-    private static final String SQL_COUNT_RECORDS = "SELECT COUNT(HTTP_METHOD) FROM ACTIVITY";
-    private static final String SQL_TOTAL_AMOUNT_DATA_SENT = "SELECT TOTAL(LENGTH(REQUEST_RAW)) FROM ACTIVITY";
-    private static final String SQL_BIGGEST_REQUEST_AMOUNT_DATA_SENT = "SELECT MAX(LENGTH(REQUEST_RAW)) FROM ACTIVITY";
-    private static final String SQL_MAX_HITS_BY_SECOND = "SELECT COUNT(REQUEST_RAW) AS HITS, SEND_DATETIME FROM ACTIVITY GROUP BY SEND_DATETIME ORDER BY HITS DESC";
+
 
     private Connection storageConnection;
     public static MontoyaApi Api;
@@ -36,7 +44,7 @@ public class ReqLogger implements ExtensionUnloadingHandler {
     /**
      * Formatter for date/time.
      */
-    private DateTimeFormatter datetimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private final DateTimeFormatter datetimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
 
     public ReqLogger(MontoyaApi api, String storeFileName) throws ClassNotFoundException, SQLException {
@@ -56,14 +64,11 @@ public class ReqLogger implements ExtensionUnloadingHandler {
 
     }
 
-    public ReqLogger() {
-    }
-
     void siteMaplogEvent(HttpRequestResponse reqInfo) throws Exception {
         //Verify that the DB connection is still opened
         this.ensureDBState();
         //Insert the event into the storage
-        try (PreparedStatement stmt = this.storageConnection.prepareStatement(SQL_TABLE_INSERT)) {
+        try (PreparedStatement stmt = this.storageConnection.prepareStatement(SQL_TABLE_UPSERT)) {
             //LOCAL_SOURCE_IP 发起请求的ip
             stmt.setString(1, InetAddress.getLocalHost().getHostAddress());
 
@@ -73,13 +78,13 @@ public class ReqLogger implements ExtensionUnloadingHandler {
             stmt.setString(3, reqInfo.request().url());
 
 
-            //BURP_TOOL 从bp哪个工具来的请求，如proxy、repeater
+            String urlString = reqInfo.request().url();
 
-//            stmt.setString(4, "SiteMap");
+            int queryIndex = urlString.indexOf("?");
 
-            URL subUrl = new URL(reqInfo.request().url());
-            String subUrlHost = subUrl.getHost();
-            stmt.setString(4, subUrlHost);
+            String urlWithoutQuery = queryIndex != -1 ? urlString.substring(0, queryIndex) : urlString;
+
+            stmt.setString(4, urlWithoutQuery);
 
 
             //请求
@@ -99,6 +104,8 @@ public class ReqLogger implements ExtensionUnloadingHandler {
             if (count != 1) {
                 Api.logging().logToOutput("Request was not inserted, no detail available (insertion counter = " + count + ") !");
             }
+        } catch (Exception e) {
+            Api.logging().logToError(e.getMessage());
         }
     }
 
