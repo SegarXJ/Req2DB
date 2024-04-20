@@ -52,7 +52,7 @@ public class ReqLogger implements ExtensionUnloadingHandler {
         Class.forName("org.sqlite.JDBC");
         this.url = "jdbc:sqlite:" + storeFileName;
         Api = api;
-        Api.logging().logToOutput("请求信息将存储在数据库文件中 '" + storeFileName + "'.");
+        Api.logging().logToOutput("REQ will be save to :'" + storeFileName + "'.");
         this.storageConnection = DriverManager.getConnection(url);
         this.storageConnection.setAutoCommit(true);
         Api.logging().logToOutput("Open new connection to the storage.");
@@ -105,7 +105,7 @@ public class ReqLogger implements ExtensionUnloadingHandler {
                 Api.logging().logToOutput("Request was not inserted, no detail available (insertion counter = " + count + ") !");
             }
         } catch (Exception e) {
-            Api.logging().logToError(e.getMessage());
+            Api.logging().logToError("log error"+e.getMessage());
         }
     }
 
